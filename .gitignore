@@ -1,0 +1,46 @@
+# Vivado generated directories
+**/.runs/
+**/.cache/
+**/.gen/
+**/.sim/
+**/.Xil/
+
+# Vivado journals and logs
+*.jou
+*.log
+*.str
+
+# Vivado generated output files
+*.pb
+*.wdb
+*.wcfg
+*.vcd
+*.bit
+*.bin
+*.ltx
+*.dcp
+*.hwdef
+*.sysdef
+*.hdf
+*.xsa
+
+# Generated IP and block-design outputs
+**/ip_user_files/
+**/.ip_user_files/
+
+# Vitis generated directories
+**/Debug/
+**/Release/
+**/_ide/
+**/.metadata/
+**/.analytics/
+
+# Windows, macOS, and editor files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*~
+*.swp
+*.swo
+.vscode/
+.idea/
