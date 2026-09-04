@@ -5,6 +5,9 @@
 **/.sim/
 **/.Xil/
 
+# Vivado hardware-manager data
+*.hw/
+
 # Vivado journals and logs
 *.jou
 *.log
