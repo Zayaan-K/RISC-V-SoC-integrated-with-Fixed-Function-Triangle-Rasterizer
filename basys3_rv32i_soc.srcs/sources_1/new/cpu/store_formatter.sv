@@ -24,7 +24,7 @@ module store_formatter (
         case (funct3)
             STORE_BYTE: begin
                 write_data =
-                    {24'b0,eichel, register_data[7:0]}
+                    {24'b0, register_data[7:0]}
                     << (address_offset * 8);
 
                 byte_enable = 4'b0001 << address_offset;

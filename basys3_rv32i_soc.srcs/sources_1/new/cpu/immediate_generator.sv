@@ -8,13 +8,14 @@
 // Target Devices: 
 //////////////////////////////////////////////////////////////////////////////////
 
+`timescale 1ns / 1ps
+
 module immediate_generator (
     input  wire [31:0] instruction,
     input  wire [2:0]  immediateSelect,
 
     output reg  [31:0] immediate
 );
-
 
     localparam [2:0] IMM_I = 3'b000;
     localparam [2:0] IMM_S = 3'b001;
@@ -24,7 +25,7 @@ module immediate_generator (
 
     always_comb begin
         case (immediateSelect)
-   
+
             IMM_I: begin
                 immediate = {
                     {20{instruction[31]}},
@@ -40,6 +41,7 @@ module immediate_generator (
                 };
             end
 
+
             IMM_B: begin
                 immediate = {
                     {19{instruction[31]}},
@@ -51,7 +53,8 @@ module immediate_generator (
                 };
             end
 
-  
+
+            IMM_U: begin
                 immediate = {
                     instruction[31:12],
                     12'b0
