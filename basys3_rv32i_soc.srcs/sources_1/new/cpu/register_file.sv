@@ -8,7 +8,7 @@
 // Target Devices: 
 //////////////////////////////////////////////////////////////////////////////////
 
-module RegisterFile (
+module register_file (
     input  wire        clk,
     input  wire        reset,
     input  wire        writeEnable,
@@ -28,15 +28,9 @@ module RegisterFile (
     integer i;
 
     // x0 always prod zero
-    assign rs1Data = (rs1Address == 5'd0)
-                   ? 32'b0
-                   : registers[rs1Address];
+    assign rs1Data = (rs1Address == 5'd0) ? 32'b0 : registers[rs1Address];
 
-    assign rs2Data = (rs2Address == 5'd0)
-                   ? 32'b0
-                   : registers[rs2Address];
-
-
+    assign rs2Data = (rs2Address == 5'd0) ? 32'b0: registers[rs2Address];
 
     always_ff @(posedge clk) begin
         if (reset) begin
