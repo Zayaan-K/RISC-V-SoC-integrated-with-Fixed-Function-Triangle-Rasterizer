@@ -9,7 +9,7 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module ALU (
+module alu (
     input  wire [31:0] operandA,
     input  wire [31:0] operandB,
     input  wire [3:0]  aluSelect,
