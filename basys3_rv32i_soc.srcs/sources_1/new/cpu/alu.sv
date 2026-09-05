@@ -28,6 +28,7 @@ module alu (
     localparam [3:0] ALU_SRA  = 4'b0111;
     localparam [3:0] ALU_OR   = 4'b1000;
     localparam [3:0] ALU_AND  = 4'b1001;
+    localparam [3:0] ALU_PASS = 4'b1010;
 
     always_comb begin
         case (aluSelect)
@@ -77,6 +78,11 @@ module alu (
             ALU_AND: begin
                 result = operandA & operandB;
             end
+
+            ALU_PASS: begin
+                result = operandB;
+            end
+
 
             default: begin
                 result = 32'b0;
