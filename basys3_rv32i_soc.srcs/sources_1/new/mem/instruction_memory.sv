@@ -1,26 +1,29 @@
 `timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date: 09/04/2026 03:26:57 PM
-// Design Name: 
-// Module Name: instruction_memory
-// Project Name: 
-// Target Devices: 
-// Tool Versions: 
-// Description: 
-// 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-//////////////////////////////////////////////////////////////////////////////////
+
+module instruction_memory #(
+    parameter integer MEMORY_WORDS = 1024,
+    parameter         INIT_FILE    = ""
+) (
+    input  wire [31:0] address,
+    output wire [31:0] instruction
+);
+
+    localparam integer ADDRESS_WIDTH = $clog2(MEMORY_WORDS);
+
+    reg [31:0] memory [0:MEMORY_WORDS-1];
+    wire [ADDRESS_WIDTH-1:0] word_address;
+
+    assign word_address = address[ADDRESS_WIDTH+1:2];
+    assign instruction = memory[word_address];
 
 
-module instruction_memory(
+    //init program 
+    initial begin
+        if (INIT_FILE != "") begin
+            $readmemh(INIT_FILE, memory);
+        end
+    end
 
-    );
 endmodule
+
+

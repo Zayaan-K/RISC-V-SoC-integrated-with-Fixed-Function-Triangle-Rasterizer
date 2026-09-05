@@ -3,9 +3,9 @@
 // Company: 
 // Engineer: 
 // 
-// Create Date: 09/04/2026 03:26:57 PM
+// Create Date: 09/04/2026 03:37:21 PM
 // Design Name: 
-// Module Name: load_store_unit
+// Module Name: rv32i_core
 // Project Name: 
 // Target Devices: 
 // Tool Versions: 
@@ -20,7 +20,7 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module load_store_unit(
+module risc_core(
 
     );
 endmodule

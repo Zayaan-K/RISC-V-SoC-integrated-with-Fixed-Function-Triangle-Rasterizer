@@ -88,31 +88,3 @@ module ALU (
     assign zero = (result == 32'b0);
 
 endmodule
-            end
-
-            ALU_SRL: begin
-                result = operandA >> operandB[4:0];
-            end
-
-            ALU_SRA: begin
-                result = $signed(operandA) >>> operandB[4:0];
-            end
-
-            ALU_OR: begin
-                result = operandA | operandB;
-            end
-
-            ALU_AND: begin
-                result = operandA & operandB;
-            end
-
-            default: begin
-                result = 32'b0;
-            end
-
-        endcase
-    end
-
-    assign zero = (result == 32'b0);
-
-endmodule
