@@ -1,0 +1,32 @@
+# compile verilog/system verilog design source files
+verilog xil_defaultlib  --include "../../../../../../../../AMDDesignTools/2026.1/Vivado/data/rsb/busdef" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/video/VGA_Driver.v" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/top.sv" \
+
+sv xil_defaultlib  --include "../../../../../../../../AMDDesignTools/2026.1/Vivado/data/rsb/busdef" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/cpu/alu.sv" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/cpu/branch_comparator.sv" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/cpu/control_unit.sv" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/mem/data_memory.sv" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/mem/framebuffer.sv" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/video/framebuffer_reader.sv" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/rasterizer/framebuffer_writer.sv" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/cpu/immediate_generator.sv" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/mem/instruction_memory.sv" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/cpu/load_formatter.sv" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/cpu/next_instruction_incrementor .sv" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/cpu/program_counter.sv" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/mem/rasterizer_registers.sv" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/rasterizer/rasterizer_top.sv" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/cpu/register_file.sv" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/cpu/risc_core.sv" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/cpu/store_formatter.sv" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/rasterizer/triangle_rasterizer.sv" \
+"../../../../basys3_rv32i_soc.srcs/sources_1/new/rasterizer/triangle_setup.sv" \
+"../../../../sim/tb_top.sv" \
+
+# compile glbl module
+verilog xil_defaultlib "glbl.v"
+
+# Do not sort compile order
+nosort

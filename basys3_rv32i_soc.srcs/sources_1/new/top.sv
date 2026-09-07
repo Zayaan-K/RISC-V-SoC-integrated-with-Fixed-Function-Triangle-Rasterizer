@@ -3,7 +3,7 @@
 module top #(
     parameter integer INSTRUCTION_WORDS = 1024,
     parameter integer DATA_WORDS        = 1024,
-    parameter         INSTRUCTION_INIT_FILE = "",
+    parameter         INSTRUCTION_INIT_FILE = "triangle_demo.mem",
 
     parameter integer FRAME_WIDTH  = 320,
     parameter integer FRAME_HEIGHT = 240,
