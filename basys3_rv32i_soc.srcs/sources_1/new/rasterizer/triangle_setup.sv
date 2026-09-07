@@ -1,3 +1,5 @@
+`timescale 1ns / 1ps
+
 module triangle_setup #(
     parameter integer COORD_WIDTH  = 16,
     parameter integer FRAME_WIDTH  = 320,
