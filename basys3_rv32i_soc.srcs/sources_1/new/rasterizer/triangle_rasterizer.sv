@@ -85,12 +85,17 @@ module triangle_rasterizer #(
             edge1_row_start <= '0;
             edge2_row_start <= '0;
 
+            framebuffer_write_enable <= 1'b0;
+            framebuffer_x            <= '0;
+            framebuffer_y            <= '0;
+            framebuffer_color        <= '0;
+
             busy <= 1'b0;
             done <= 1'b0;
         end
         else begin
-            
-            done <= 1'b0;
+            done                     <= 1'b0;
+            framebuffer_write_enable <= 1'b0;
 
             if (start && !busy) begin
                 current_x <= min_x;
@@ -106,16 +111,13 @@ module triangle_rasterizer #(
 
                 busy <= 1'b1;
             end
-
             else if (busy) begin
- 
                 if (pixel_inside) begin
                     framebuffer_write_enable <= 1'b1;
                     framebuffer_x            <= current_x;
                     framebuffer_y            <= current_y;
                     framebuffer_color        <= triangle_color;
                 end
-
 
                 if (current_x < max_x) begin
                     current_x <= current_x + 1'b1;
@@ -124,8 +126,24 @@ module triangle_rasterizer #(
                     edge1_value <= edge1_value + edge1_step_x;
                     edge2_value <= edge2_value + edge2_step_x;
                 end
+                else if (current_y < max_y) begin
+                    current_x <= min_x;
+                    current_y <= current_y + 1'b1;
+
+                    edge0_row_start <= edge0_row_start + edge0_step_y;
+                    edge1_row_start <= edge1_row_start + edge1_step_y;
+                    edge2_row_start <= edge2_row_start + edge2_step_y;
+
+                    edge0_value <= edge0_row_start + edge0_step_y;
+                    edge1_value <= edge1_row_start + edge1_step_y;
+                    edge2_value <= edge2_row_start + edge2_step_y;
+                end
+                else begin
+                    busy <= 1'b0;
+                    done <= 1'b1;
+
+                end
             end
-            
         end
     end
 
