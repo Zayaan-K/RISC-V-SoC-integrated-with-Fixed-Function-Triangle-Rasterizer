@@ -5,7 +5,7 @@ module triangle_rasterizer #(
     parameter integer COLOR_WIDTH = 12,
 
     parameter integer COEFF_WIDTH = COORD_WIDTH + 1,
-    parameter integer EDGE_WIDTH  = (2 * COORD_WIDTH) + 2
+    parameter integer EDGE_WIDTH  = (2 * COORD_WIDTH) + 3
 )(
     input wire clk,
     input wire reset,

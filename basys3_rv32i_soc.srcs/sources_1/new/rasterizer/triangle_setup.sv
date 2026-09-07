@@ -425,10 +425,10 @@ module triangle_setup #(
                     edge_start[1] <= calculated_edge_start[1];
                     edge_start[2] <= calculated_edge_start[2];
 
-                    /*
+                    /*//=============================================
                      * Top-left edge inclusion rule.
                      * Screen Y coordinates increase downward.
-                     */
+                     *///=======================================
 
                     edge_inclusive[0] <=
                         (edge_a[0] > 0) ||

@@ -14,7 +14,7 @@ module frame_buffer #(
     input wire [COLOR_WIDTH-1:0]    write_color,
 
     // VGA read port
-    input  wire [ADDR_WIDTH-1:0]    read_address,S
+    input  wire [ADDR_WIDTH-1:0]    read_address,
     output reg  [COLOR_WIDTH-1:0]   read_color
 );
 
