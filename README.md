@@ -1,5 +1,4 @@
 ﻿# RISC-V-SoC-integrated-with-Fixed-Function-Triangle-Rasterizer
-# RV32I SoC with Fixed-Function Triangle Rasterizer
 
 A SystemVerilog implementation of a small RV32I system-on-chip with a memory-mapped, fixed-function triangle rasterizer. The project targets the Digilent Basys 3 FPGA and displays rasterized graphics through VGA.
 
