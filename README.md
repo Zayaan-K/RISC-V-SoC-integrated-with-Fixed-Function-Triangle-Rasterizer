@@ -78,7 +78,3 @@ This design is a compact demonstration of how a processor and specialized graphi
 
 Zayaan Khandakar  
 Electrical Engineering student focused on FPGA systems, digital hardware, embedded software, and PCB design.
-
-## License
-
-Add a license before redistributing or accepting external contributions. The MIT License is a common choice for open-source hardware source code.
