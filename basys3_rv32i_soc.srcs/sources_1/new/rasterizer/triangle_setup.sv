@@ -1,9 +1,8 @@
 `timescale 1ns / 1ps
 
-module triangle_setup #(
-    parameter integer COORD_WIDTH  = 16,
-    parameter integer FRAME_WIDTH  = 320,
-    parameter integer FRAME_HEIGHT = 240,
+module triangle_rasterizer #(
+    parameter integer COORD_WIDTH = 16,
+    parameter integer COLOR_WIDTH = 12,
 
     parameter integer COEFF_WIDTH = COORD_WIDTH + 1,
     parameter integer EDGE_WIDTH  = (2 * COORD_WIDTH) + 3
@@ -12,354 +11,225 @@ module triangle_setup #(
     input wire reset,
     input wire start,
 
-    input wire signed [COORD_WIDTH-1:0] x0,
-    input wire signed [COORD_WIDTH-1:0] y0,
-    input wire signed [COORD_WIDTH-1:0] x1,
-    input wire signed [COORD_WIDTH-1:0] y1,
-    input wire signed [COORD_WIDTH-1:0] x2,
-    input wire signed [COORD_WIDTH-1:0] y2,
+    // Bounding box
+    input wire signed [COORD_WIDTH-1:0] min_x,
+    input wire signed [COORD_WIDTH-1:0] max_x,
+    input wire signed [COORD_WIDTH-1:0] min_y,
+    input wire signed [COORD_WIDTH-1:0] max_y,
 
-    output reg  busy,
-    output reg  done,
-    output wire triangle_skip,
+    // Edge-equation values at (min_x, min_y)
+    input wire signed [EDGE_WIDTH-1:0] edge0_start,
+    input wire signed [EDGE_WIDTH-1:0] edge1_start,
+    input wire signed [EDGE_WIDTH-1:0] edge2_start,
 
-    output reg signed [COORD_WIDTH-1:0] min_x,
-    output reg signed [COORD_WIDTH-1:0] max_x,
-    output reg signed [COORD_WIDTH-1:0] min_y,
-    output reg signed [COORD_WIDTH-1:0] max_y,
+    // Edge-equation change when moving one pixel right
+    input wire signed [COEFF_WIDTH-1:0] edge0_step_x,
+    input wire signed [COEFF_WIDTH-1:0] edge1_step_x,
+    input wire signed [COEFF_WIDTH-1:0] edge2_step_x,
 
-    output reg signed [COEFF_WIDTH-1:0] edge_a [0:2],
-    output reg signed [COEFF_WIDTH-1:0] edge_b [0:2],
-    output reg signed [EDGE_WIDTH-1:0]  edge_c [0:2],
+    // Edge-equation change when moving one pixel down
+    input wire signed [COEFF_WIDTH-1:0] edge0_step_y,
+    input wire signed [COEFF_WIDTH-1:0] edge1_step_y,
+    input wire signed [COEFF_WIDTH-1:0] edge2_step_y,
 
-    output reg signed [EDGE_WIDTH-1:0] edge_start [0:2],
-    output reg [2:0] edge_inclusive
+    // Top-left rule
+    input wire edge0_inclusive,
+    input wire edge1_inclusive,
+    input wire edge2_inclusive,
+
+    input wire [COLOR_WIDTH-1:0] triangle_color,
+
+    output reg framebuffer_write_enable,
+    output reg signed [COORD_WIDTH-1:0] framebuffer_x,
+    output reg signed [COORD_WIDTH-1:0] framebuffer_y,
+    output reg [COLOR_WIDTH-1:0] framebuffer_color,
+
+    output reg busy,
+    output reg done
 );
 
-    localparam [1:0] IDLE            = 2'd0;
-    localparam [1:0] CALCULATE       = 2'd1;
-    localparam [1:0] CALCULATE_START = 2'd2;
-    localparam [1:0] FINISH          = 2'd3;
+    reg signed [COORD_WIDTH-1:0] current_x;
+    reg signed [COORD_WIDTH-1:0] current_y;
 
-    localparam integer C_PRODUCT_WIDTH = 2 * COORD_WIDTH;
-    localparam integer AREA_PRODUCT_WIDTH = 2 * (COORD_WIDTH + 1);
-    localparam integer START_PRODUCT_WIDTH = COEFF_WIDTH + COORD_WIDTH;
-    localparam signed [COORD_WIDTH-1:0] SCREEN_MAX_X = FRAME_WIDTH - 1;
-    localparam signed [COORD_WIDTH-1:0] SCREEN_MAX_Y = FRAME_HEIGHT - 1;
+    reg signed [COORD_WIDTH-1:0] stored_min_x;
+    reg signed [COORD_WIDTH-1:0] stored_max_x;
+    reg signed [COORD_WIDTH-1:0] stored_max_y;
 
-    reg [1:0] state;
+    // Edge values at the current pixel
+    reg signed [EDGE_WIDTH-1:0] edge0_value;
+    reg signed [EDGE_WIDTH-1:0] edge1_value;
+    reg signed [EDGE_WIDTH-1:0] edge2_value;
 
-    // Captured vertices
-    reg signed [COORD_WIDTH-1:0] x0_reg;
-    reg signed [COORD_WIDTH-1:0] y0_reg;
-    reg signed [COORD_WIDTH-1:0] x1_reg;
-    reg signed [COORD_WIDTH-1:0] y1_reg;
-    reg signed [COORD_WIDTH-1:0] x2_reg;
-    reg signed [COORD_WIDTH-1:0] y2_reg;
-
-    wire signed [COORD_WIDTH:0] x0_ext;
-    wire signed [COORD_WIDTH:0] y0_ext;
-    wire signed [COORD_WIDTH:0] x1_ext;
-    wire signed [COORD_WIDTH:0] y1_ext;
-    wire signed [COORD_WIDTH:0] x2_ext;
-    wire signed [COORD_WIDTH:0] y2_ext;
-
-    wire signed [COORD_WIDTH-1:0] raw_min_x;
-    wire signed [COORD_WIDTH-1:0] raw_max_x;
-    wire signed [COORD_WIDTH-1:0] raw_min_y;
-    wire signed [COORD_WIDTH-1:0] raw_max_y;
+    // Edge values at the first pixel of the current row
+    reg signed [EDGE_WIDTH-1:0] edge0_row_start;
+    reg signed [EDGE_WIDTH-1:0] edge1_row_start;
+    reg signed [EDGE_WIDTH-1:0] edge2_row_start;
 
 
-    wire signed [COORD_WIDTH:0] dx10;
-    wire signed [COORD_WIDTH:0] dy10;
-    wire signed [COORD_WIDTH:0] dx20;
-    wire signed [COORD_WIDTH:0] dy20;
+    reg signed [COEFF_WIDTH-1:0] stored_edge0_step_x;
+    reg signed [COEFF_WIDTH-1:0] stored_edge1_step_x;
+    reg signed [COEFF_WIDTH-1:0] stored_edge2_step_x;
 
-    wire signed [AREA_PRODUCT_WIDTH-1:0] area_product_0;
-    wire signed [AREA_PRODUCT_WIDTH-1:0] area_product_1;
+    reg signed [COEFF_WIDTH-1:0] stored_edge0_step_y;
+    reg signed [COEFF_WIDTH-1:0] stored_edge1_step_y;
+    reg signed [COEFF_WIDTH-1:0] stored_edge2_step_y;
 
-    wire signed [EDGE_WIDTH-1:0] area_product_0_ext;
-    wire signed [EDGE_WIDTH-1:0] area_product_1_ext;
-    wire signed [EDGE_WIDTH-1:0] area_twice;
-    
-    // E(x,y) = A*x + B*y + C   
-    wire signed [COEFF_WIDTH-1:0] raw_edge_a [0:2];
-    wire signed [COEFF_WIDTH-1:0] raw_edge_b [0:2];
-    wire signed [EDGE_WIDTH-1:0]  raw_edge_c [0:2];
+    // Captured top-left flags and color
+    reg stored_edge0_inclusive;
+    reg stored_edge1_inclusive;
+    reg stored_edge2_inclusive;
 
-    wire signed [C_PRODUCT_WIDTH-1:0] c0_product_0;
-    wire signed [C_PRODUCT_WIDTH-1:0] c0_product_1;
-    wire signed [C_PRODUCT_WIDTH-1:0] c1_product_0;
-    wire signed [C_PRODUCT_WIDTH-1:0] c1_product_1;
-    wire signed [C_PRODUCT_WIDTH-1:0] c2_product_0;
-    wire signed [C_PRODUCT_WIDTH-1:0] c2_product_1;
+    reg [COLOR_WIDTH-1:0] stored_triangle_color;
 
-    wire signed [EDGE_WIDTH-1:0] c0_product_0_ext;
-    wire signed [EDGE_WIDTH-1:0] c0_product_1_ext;
-    wire signed [EDGE_WIDTH-1:0] c1_product_0_ext;
-    wire signed [EDGE_WIDTH-1:0] c1_product_1_ext;
-    wire signed [EDGE_WIDTH-1:0] c2_product_0_ext;
-    wire signed [EDGE_WIDTH-1:0] c2_product_1_ext;
+    // Inside-triangle test
+    wire edge0_pass;
+    wire edge1_pass;
+    wire edge2_pass;
+    wire pixel_inside;
 
+    assign edge0_pass =(edge0_value > 0) || ((edge0_value == 0) && stored_edge0_inclusive);
 
-    wire signed [START_PRODUCT_WIDTH-1:0] edge_x_product [0:2];
-    wire signed [START_PRODUCT_WIDTH-1:0] edge_y_product [0:2];
+    assign edge1_pass = (edge1_value > 0) || ((edge1_value == 0) && stored_edge1_inclusive);
 
-    wire signed [EDGE_WIDTH-1:0] edge_x_product_ext [0:2];
-    wire signed [EDGE_WIDTH-1:0] edge_y_product_ext [0:2];
+    assign edge2_pass =(edge2_value > 0) || ((edge2_value == 0) && stored_edge2_inclusive);
 
-    wire signed [EDGE_WIDTH-1:0] calculated_edge_start [0:2];
+    assign pixel_inside = edge0_pass && edge1_pass && edge2_pass;
 
-
-    wire bbox_outside;
-
-    assign raw_min_x = min2(min2(x0_reg, x1_reg), x2_reg);
-    assign raw_max_x = max2(max2(x0_reg, x1_reg), x2_reg);
-
-    assign raw_min_y = min2(min2(y0_reg, y1_reg), y2_reg);
-    assign raw_max_y = max2(max2(y0_reg, y1_reg), y2_reg);
-
-    assign bbox_outside = (raw_max_x < 0) || (raw_min_x > SCREEN_MAX_X) || (raw_max_y < 0) || (raw_min_y > SCREEN_MAX_Y);
-
-    assign x0_ext = {x0_reg[COORD_WIDTH-1], x0_reg};
-    assign y0_ext = {y0_reg[COORD_WIDTH-1], y0_reg};
-    assign x1_ext = {x1_reg[COORD_WIDTH-1], x1_reg};
-    assign y1_ext = {y1_reg[COORD_WIDTH-1], y1_reg};
-    assign x2_ext = {x2_reg[COORD_WIDTH-1], x2_reg};
-    assign y2_ext = {y2_reg[COORD_WIDTH-1], y2_reg};
-
-    assign dx10 = x1_ext - x0_ext;
-    assign dy10 = y1_ext - y0_ext;
-    assign dx20 = x2_ext - x0_ext;
-    assign dy20 = y2_ext - y0_ext;
-
-    assign area_product_0 = dx10 * dy20;
-    assign area_product_1 = dy10 * dx20;
-
-    assign area_product_0_ext = { {(EDGE_WIDTH-AREA_PRODUCT_WIDTH) {area_product_0[AREA_PRODUCT_WIDTH-1]}},area_product_0};
-    assign area_product_1_ext = {{(EDGE_WIDTH-AREA_PRODUCT_WIDTH) {area_product_1[AREA_PRODUCT_WIDTH-1]}},area_product_1};
-
-    assign area_twice = area_product_0_ext - area_product_1_ext;
-
-    assign triangle_skip =  (area_twice == 0) || bbox_outside;
-
-    // Edge 0: v0 -> v1
-    assign raw_edge_a[0] = y0_ext - y1_ext;
-    assign raw_edge_b[0] = x1_ext - x0_ext;
-
-    // Edge 1: v1 -> v2
-    assign raw_edge_a[1] = y1_ext - y2_ext;
-    assign raw_edge_b[1] = x2_ext - x1_ext;
-
-    // Edge 2: v2 -> v0
-    assign raw_edge_a[2] = y2_ext - y0_ext;
-    assign raw_edge_b[2] = x0_ext - x2_ext;
-
-   assign c0_product_0 = x0_reg * y1_reg;
-    assign c0_product_1 = y0_reg * x1_reg;
-
-    assign c1_product_0 = x1_reg * y2_reg;
-    assign c1_product_1 = y1_reg * x2_reg;
-
-    assign c2_product_0 = x2_reg * y0_reg;
-    assign c2_product_1 = y2_reg * x0_reg;
-
-    assign c0_product_0_ext = { {(EDGE_WIDTH-C_PRODUCT_WIDTH) {c0_product_0[C_PRODUCT_WIDTH-1]}},c0_product_0};
-    assign c0_product_1_ext = { {(EDGE_WIDTH-C_PRODUCT_WIDTH) {c0_product_1[C_PRODUCT_WIDTH-1]}},c0_product_1};
-    assign c1_product_0_ext = {{(EDGE_WIDTH-C_PRODUCT_WIDTH) { c1_product_0[C_PRODUCT_WIDTH-1]}}, c1_product_0};
-    assign c1_product_1_ext = { {(EDGE_WIDTH-C_PRODUCT_WIDTH) {c1_product_1[C_PRODUCT_WIDTH-1]}},c1_product_1};
-    assign c2_product_0_ext = {{(EDGE_WIDTH-C_PRODUCT_WIDTH) {c2_product_0[C_PRODUCT_WIDTH-1]}},c2_product_0};
-    assign c2_product_1_ext = {{(EDGE_WIDTH-C_PRODUCT_WIDTH) {c2_product_1[C_PRODUCT_WIDTH-1]}},c2_product_1};
-
-    assign raw_edge_c[0] = c0_product_0_ext - c0_product_1_ext;
-    assign raw_edge_c[1] = c1_product_0_ext - c1_product_1_ext;
-    assign raw_edge_c[2] = c2_product_0_ext - c2_product_1_ext;
-
-    assign edge_x_product[0] = edge_a[0] * min_x;
-    assign edge_x_product[1] = edge_a[1] * min_x;
-    assign edge_x_product[2] = edge_a[2] * min_x;
-
-    assign edge_y_product[0] = edge_b[0] * min_y;
-    assign edge_y_product[1] = edge_b[1] * min_y;
-    assign edge_y_product[2] = edge_b[2] * min_y;
-
-
-    assign edge_x_product_ext[0] = {{(EDGE_WIDTH-START_PRODUCT_WIDTH) {edge_x_product[0][START_PRODUCT_WIDTH-1]}},edge_x_product[0]};
-
-    assign edge_x_product_ext[1] = {{(EDGE_WIDTH-START_PRODUCT_WIDTH) {edge_x_product[1][START_PRODUCT_WIDTH-1]}},edge_x_product[1]};
-
-    assign edge_x_product_ext[2] = {{(EDGE_WIDTH-START_PRODUCT_WIDTH) {edge_x_product[2][START_PRODUCT_WIDTH-1]}},edge_x_product[2]};
-
-    assign edge_y_product_ext[0] = {{(EDGE_WIDTH-START_PRODUCT_WIDTH) {edge_y_product[0][START_PRODUCT_WIDTH-1] }},edge_y_product[0]};
-
-    assign edge_y_product_ext[1] = { {(EDGE_WIDTH-START_PRODUCT_WIDTH) {edge_y_product[1][START_PRODUCT_WIDTH-1]}},edge_y_product[1]};
-
-    assign edge_y_product_ext[2] = {{(EDGE_WIDTH-START_PRODUCT_WIDTH) {edge_y_product[2][START_PRODUCT_WIDTH-1]}}, edge_y_product[2] };
-
-    assign calculated_edge_start[0] = edge_x_product_ext[0] + edge_y_product_ext[0] + edge_c[0];
-    assign calculated_edge_start[1] = edge_x_product_ext[1] + edge_y_product_ext[1] + edge_c[1];
-    assign calculated_edge_start[2] = edge_x_product_ext[2] +edge_y_product_ext[2] +edge_c[2];
-
-
-    function signed [COORD_WIDTH-1:0] min2;
-        input signed [COORD_WIDTH-1:0] a;
-        input signed [COORD_WIDTH-1:0] b;
-
-        begin
-            min2 = (a < b) ? a : b;
-        end
-    endfunction
-
-    function signed [COORD_WIDTH-1:0] max2;
-        input signed [COORD_WIDTH-1:0] a;
-        input signed [COORD_WIDTH-1:0] b;
-
-        begin
-            max2 = (a > b) ? a : b;
-        end
-    endfunction
-
-
-    always @(posedge clk) begin
+    always_ff @(posedge clk) begin
         if (reset) begin
-            state <= IDLE;
+            current_x <= '0;
+            current_y <= '0;
 
-            x0_reg <= 0;
-            y0_reg <= 0;
-            x1_reg <= 0;
-            y1_reg <= 0;
-            x2_reg <= 0;
-            y2_reg <= 0;
+            stored_min_x <= '0;
+            stored_max_x <= '0;
+            stored_max_y <= '0;
 
-            min_x <= 0;
-            max_x <= 0;
-            min_y <= 0;
-            max_y <= 0;
+            edge0_value <= '0;
+            edge1_value <= '0;
+            edge2_value <= '0;
 
-            edge_a[0] <= 0;
-            edge_a[1] <= 0;
-            edge_a[2] <= 0;
+            edge0_row_start <= '0;
+            edge1_row_start <= '0;
+            edge2_row_start <= '0;
 
-            edge_b[0] <= 0;
-            edge_b[1] <= 0;
-            edge_b[2] <= 0;
+            stored_edge0_step_x <= '0;
+            stored_edge1_step_x <= '0;
+            stored_edge2_step_x <= '0;
 
-            edge_c[0] <= 0;
-            edge_c[1] <= 0;
-            edge_c[2] <= 0;
+            stored_edge0_step_y <= '0;
+            stored_edge1_step_y <= '0;
+            stored_edge2_step_y <= '0;
 
-            edge_start[0] <= 0;
-            edge_start[1] <= 0;
-            edge_start[2] <= 0;
+            stored_edge0_inclusive <= 1'b0;
+            stored_edge1_inclusive <= 1'b0;
+            stored_edge2_inclusive <= 1'b0;
 
-            edge_inclusive <= 3'b000;
+            stored_triangle_color <= '0;
+
+            framebuffer_write_enable <= 1'b0;
+            framebuffer_x            <= '0;
+            framebuffer_y            <= '0;
+            framebuffer_color        <= '0;
 
             busy <= 1'b0;
             done <= 1'b0;
+        end
+        else begin
 
-        end else begin
-            done <= 1'b0;
+            done                     <= 1'b0;
+            framebuffer_write_enable <= 1'b0;
 
-            case (state)
-                IDLE: begin
+            if (start && !busy) begin
+                
+                //invalid triangle
+                if ((min_x > max_x) || (min_y > max_y)) begin
                     busy <= 1'b0;
+                    done <= 1'b1;
+                end
+                else begin
 
-                    if (start) begin
-                        x0_reg <= x0;
-                        y0_reg <= y0;
-                        x1_reg <= x1;
-                        y1_reg <= y1;
-                        x2_reg <= x2;
-                        y2_reg <= y2;
 
-                        busy  <= 1'b1;
-                        state <= CALCULATE;
-                    end
+                    stored_min_x <= min_x;
+                    stored_max_x <= max_x;
+                    stored_max_y <= max_y;
+
+                    current_x <= min_x;
+                    current_y <= min_y;
+
+
+                    edge0_value <= edge0_start;
+                    edge1_value <= edge1_start;
+                    edge2_value <= edge2_start;
+
+
+                    edge0_row_start <= edge0_start;
+                    edge1_row_start <= edge1_start;
+                    edge2_row_start <= edge2_start;
+
+                    stored_edge0_step_x <= edge0_step_x;
+                    stored_edge1_step_x <= edge1_step_x;
+                    stored_edge2_step_x <= edge2_step_x;
+
+                    stored_edge0_step_y <= edge0_step_y;
+                    stored_edge1_step_y <= edge1_step_y;
+                    stored_edge2_step_y <= edge2_step_y;
+
+                    stored_edge0_inclusive <= edge0_inclusive;
+                    stored_edge1_inclusive <= edge1_inclusive;
+                    stored_edge2_inclusive <= edge2_inclusive;
+
+
+                    stored_triangle_color <= triangle_color;
+
+                    busy <= 1'b1;
+                end
+            end
+
+            else if (busy) begin
+
+                if (pixel_inside) begin
+                    framebuffer_write_enable <= 1'b1;
+                    framebuffer_x            <= current_x;
+                    framebuffer_y            <= current_y;
+                    framebuffer_color        <= stored_triangle_color;
                 end
 
-                CALCULATE: begin
-                    min_x <= (raw_min_x < 0)
-                           ? 0
-                           : raw_min_x;
+                
+                if (current_x < stored_max_x) begin
+                    current_x <= current_x + 1'b1;
 
-                    max_x <= (raw_max_x > SCREEN_MAX_X)
-                           ? SCREEN_MAX_X
-                           : raw_max_x;
+                    edge0_value <=
+                        edge0_value + stored_edge0_step_x;
 
-                    min_y <= (raw_min_y < 0)
-                           ? 0
-                           : raw_min_y;
+                    edge1_value <=
+                        edge1_value + stored_edge1_step_x;
 
-                    max_y <= (raw_max_y > SCREEN_MAX_Y)
-                           ? SCREEN_MAX_Y
-                           : raw_max_y;
+                    edge2_value <=
+                        edge2_value + stored_edge2_step_x;
+                end
+
+                else if (current_y < stored_max_y) begin
+                    current_x <= stored_min_x;
+                    current_y <= current_y + 1'b1;
+
+                    edge0_row_start <= edge0_row_start + stored_edge0_step_y;
+                    edge1_row_start <= edge1_row_start + stored_edge1_step_y;
+                    edge2_row_start <= edge2_row_start + stored_edge2_step_y;
                     
-                    //normalized so positive = triangle interior
-
-                    if (area_twice > 0) begin
-                        edge_a[0] <= raw_edge_a[0];
-                        edge_a[1] <= raw_edge_a[1];
-                        edge_a[2] <= raw_edge_a[2];
-
-                        edge_b[0] <= raw_edge_b[0];
-                        edge_b[1] <= raw_edge_b[1];
-                        edge_b[2] <= raw_edge_b[2];
-
-                        edge_c[0] <= raw_edge_c[0];
-                        edge_c[1] <= raw_edge_c[1];
-                        edge_c[2] <= raw_edge_c[2];
-                    end else begin
-                        edge_a[0] <= -raw_edge_a[0];
-                        edge_a[1] <= -raw_edge_a[1];
-                        edge_a[2] <= -raw_edge_a[2];
-
-                        edge_b[0] <= -raw_edge_b[0];
-                        edge_b[1] <= -raw_edge_b[1];
-                        edge_b[2] <= -raw_edge_b[2];
-
-                        edge_c[0] <= -raw_edge_c[0];
-                        edge_c[1] <= -raw_edge_c[1];
-                        edge_c[2] <= -raw_edge_c[2];
-                    end
-
-                    state <= CALCULATE_START;
+                    edge0_value <= edge0_row_start + stored_edge0_step_y;
+                    edge1_value <= edge1_row_start + stored_edge1_step_y;
+                    edge2_value <= edge2_row_start + stored_edge2_step_y;
                 end
 
-                CALCULATE_START: begin
 
-                    edge_start[0] <= calculated_edge_start[0];
-                    edge_start[1] <= calculated_edge_start[1];
-                    edge_start[2] <= calculated_edge_start[2];
-
-                    /*//=============================================
-                     * Top-left edge inclusion rule.
-                     * Screen Y coordinates increase downward.
-                     *       (y_a == y_b && x_a < x_b); means flat line pointing right    //top edge
-                     *       (y_a > y_b); or (Aab > 0)                // left edge
-                     *///=======================================
-
-                    edge_inclusive[0] <= (edge_a[0] > 0) ||((edge_a[0] == 0) && (edge_b[0] > 0));
-
-                    edge_inclusive[1] <= (edge_a[1] > 0) || ((edge_a[1] == 0) && (edge_b[1] > 0));
-
-                    edge_inclusive[2] <= (edge_a[2] > 0) || ((edge_a[2] == 0) &&  (edge_b[2] > 0));
-
-                    state <= FINISH;
+                else begin
+                    busy <= 1'b0;
+                    done <= 1'b1;
                 end
-
-                FINISH: begin
-                    busy  <= 1'b0;
-                    done  <= 1'b1;
-                    state <= IDLE;
-                end
-
-                default: begin
-                    busy  <= 1'b0;
-                    done  <= 1'b0;
-                    state <= IDLE;
-                end
-            endcase
+            end
         end
     end
 
 endmodule
+
+
