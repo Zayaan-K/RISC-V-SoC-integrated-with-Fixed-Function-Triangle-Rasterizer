@@ -334,7 +334,7 @@ module triangle_setup #(
                     /*//=============================================
                      * Top-left edge inclusion rule.
                      * Screen Y coordinates increase downward.
-                     *       (y_a == y_b && x_a < x_b); means flat line pointing left    //top edge
+                     *       (y_a == y_b && x_a < x_b); means flat line pointing right    //top edge
                      *       (y_a > y_b); or (Aab > 0)                // left edge
                      *///=======================================
 
