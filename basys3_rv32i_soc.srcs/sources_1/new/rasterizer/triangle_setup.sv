@@ -64,6 +64,63 @@ module triangle_setup #(
     wire signed [COORD_WIDTH:0] x2_ext;
     wire signed [COORD_WIDTH:0] y2_ext;
 
+    wire signed [COORD_WIDTH-1:0] raw_min_x;
+    wire signed [COORD_WIDTH-1:0] raw_max_x;
+    wire signed [COORD_WIDTH-1:0] raw_min_y;
+    wire signed [COORD_WIDTH-1:0] raw_max_y;
+
+
+    wire signed [COORD_WIDTH:0] dx10;
+    wire signed [COORD_WIDTH:0] dy10;
+    wire signed [COORD_WIDTH:0] dx20;
+    wire signed [COORD_WIDTH:0] dy20;
+
+    wire signed [AREA_PRODUCT_WIDTH-1:0] area_product_0;
+    wire signed [AREA_PRODUCT_WIDTH-1:0] area_product_1;
+
+    wire signed [EDGE_WIDTH-1:0] area_product_0_ext;
+    wire signed [EDGE_WIDTH-1:0] area_product_1_ext;
+    wire signed [EDGE_WIDTH-1:0] area_twice;
+    
+    // E(x,y) = A*x + B*y + C   
+    wire signed [COEFF_WIDTH-1:0] raw_edge_a [0:2];
+    wire signed [COEFF_WIDTH-1:0] raw_edge_b [0:2];
+    wire signed [EDGE_WIDTH-1:0]  raw_edge_c [0:2];
+
+    wire signed [C_PRODUCT_WIDTH-1:0] c0_product_0;
+    wire signed [C_PRODUCT_WIDTH-1:0] c0_product_1;
+    wire signed [C_PRODUCT_WIDTH-1:0] c1_product_0;
+    wire signed [C_PRODUCT_WIDTH-1:0] c1_product_1;
+    wire signed [C_PRODUCT_WIDTH-1:0] c2_product_0;
+    wire signed [C_PRODUCT_WIDTH-1:0] c2_product_1;
+
+    wire signed [EDGE_WIDTH-1:0] c0_product_0_ext;
+    wire signed [EDGE_WIDTH-1:0] c0_product_1_ext;
+    wire signed [EDGE_WIDTH-1:0] c1_product_0_ext;
+    wire signed [EDGE_WIDTH-1:0] c1_product_1_ext;
+    wire signed [EDGE_WIDTH-1:0] c2_product_0_ext;
+    wire signed [EDGE_WIDTH-1:0] c2_product_1_ext;
+
+
+    wire signed [START_PRODUCT_WIDTH-1:0] edge_x_product [0:2];
+    wire signed [START_PRODUCT_WIDTH-1:0] edge_y_product [0:2];
+
+    wire signed [EDGE_WIDTH-1:0] edge_x_product_ext [0:2];
+    wire signed [EDGE_WIDTH-1:0] edge_y_product_ext [0:2];
+
+    wire signed [EDGE_WIDTH-1:0] calculated_edge_start [0:2];
+
+
+    wire bbox_outside;
+
+    assign raw_min_x = min2(min2(x0_reg, x1_reg), x2_reg);
+    assign raw_max_x = max2(max2(x0_reg, x1_reg), x2_reg);
+
+    assign raw_min_y = min2(min2(y0_reg, y1_reg), y2_reg);
+    assign raw_max_y = max2(max2(y0_reg, y1_reg), y2_reg);
+
+    assign bbox_outside = (raw_max_x < 0) || (raw_min_x > SCREEN_MAX_X) || (raw_max_y < 0) || (raw_min_y > SCREEN_MAX_Y);
+
     assign x0_ext = {x0_reg[COORD_WIDTH-1], x0_reg};
     assign y0_ext = {y0_reg[COORD_WIDTH-1], y0_reg};
     assign x1_ext = {x1_reg[COORD_WIDTH-1], x1_reg};
@@ -71,14 +128,78 @@ module triangle_setup #(
     assign x2_ext = {x2_reg[COORD_WIDTH-1], x2_reg};
     assign y2_ext = {y2_reg[COORD_WIDTH-1], y2_reg};
 
+    assign dx10 = x1_ext - x0_ext;
+    assign dy10 = y1_ext - y0_ext;
+    assign dx20 = x2_ext - x0_ext;
+    assign dy20 = y2_ext - y0_ext;
+
+    assign area_product_0 = dx10 * dy20;
+    assign area_product_1 = dy10 * dx20;
+
+    assign area_product_0_ext = { {(EDGE_WIDTH-AREA_PRODUCT_WIDTH) {area_product_0[AREA_PRODUCT_WIDTH-1]}},area_product_0};
+    assign area_product_1_ext = {{(EDGE_WIDTH-AREA_PRODUCT_WIDTH) {area_product_1[AREA_PRODUCT_WIDTH-1]}},area_product_1};
+
+    assign area_twice = area_product_0_ext - area_product_1_ext;
+
+    assign triangle_skip =  (area_twice == 0) || bbox_outside;
+
+    // Edge 0: v0 -> v1
+    assign raw_edge_a[0] = y0_ext - y1_ext;
+    assign raw_edge_b[0] = x1_ext - x0_ext;
+
+    // Edge 1: v1 -> v2
+    assign raw_edge_a[1] = y1_ext - y2_ext;
+    assign raw_edge_b[1] = x2_ext - x1_ext;
+
+    // Edge 2: v2 -> v0
+    assign raw_edge_a[2] = y2_ext - y0_ext;
+    assign raw_edge_b[2] = x0_ext - x2_ext;
+
+   assign c0_product_0 = x0_reg * y1_reg;
+    assign c0_product_1 = y0_reg * x1_reg;
+
+    assign c1_product_0 = x1_reg * y2_reg;
+    assign c1_product_1 = y1_reg * x2_reg;
+
+    assign c2_product_0 = x2_reg * y0_reg;
+    assign c2_product_1 = y2_reg * x0_reg;
+
+    assign c0_product_0_ext = { {(EDGE_WIDTH-C_PRODUCT_WIDTH) {c0_product_0[C_PRODUCT_WIDTH-1]}},c0_product_0};
+    assign c0_product_1_ext = { {(EDGE_WIDTH-C_PRODUCT_WIDTH) {c0_product_1[C_PRODUCT_WIDTH-1]}},c0_product_1};
+    assign c1_product_0_ext = {{(EDGE_WIDTH-C_PRODUCT_WIDTH) { c1_product_0[C_PRODUCT_WIDTH-1]}}, c1_product_0};
+    assign c1_product_1_ext = { {(EDGE_WIDTH-C_PRODUCT_WIDTH) {c1_product_1[C_PRODUCT_WIDTH-1]}},c1_product_1};
+    assign c2_product_0_ext = {{(EDGE_WIDTH-C_PRODUCT_WIDTH) {c2_product_0[C_PRODUCT_WIDTH-1]}},c2_product_0};
+    assign c2_product_1_ext = {{(EDGE_WIDTH-C_PRODUCT_WIDTH) {c2_product_1[C_PRODUCT_WIDTH-1]}},c2_product_1};
+
+    assign raw_edge_c[0] = c0_product_0_ext - c0_product_1_ext;
+    assign raw_edge_c[1] = c1_product_0_ext - c1_product_1_ext;
+    assign raw_edge_c[2] = c2_product_0_ext - c2_product_1_ext;
+
+    assign edge_x_product[0] = edge_a[0] * min_x;
+    assign edge_x_product[1] = edge_a[1] * min_x;
+    assign edge_x_product[2] = edge_a[2] * min_x;
+
+    assign edge_y_product[0] = edge_b[0] * min_y;
+    assign edge_y_product[1] = edge_b[1] * min_y;
+    assign edge_y_product[2] = edge_b[2] * min_y;
 
 
-    wire signed [COORD_WIDTH-1:0] raw_min_x;
-    wire signed [COORD_WIDTH-1:0] raw_max_x;
-    wire signed [COORD_WIDTH-1:0] raw_min_y;
-    wire signed [COORD_WIDTH-1:0] raw_max_y;
+    assign edge_x_product_ext[0] = {{(EDGE_WIDTH-START_PRODUCT_WIDTH) {edge_x_product[0][START_PRODUCT_WIDTH-1]}},edge_x_product[0]};
 
-    wire bbox_outside;
+    assign edge_x_product_ext[1] = {{(EDGE_WIDTH-START_PRODUCT_WIDTH) {edge_x_product[1][START_PRODUCT_WIDTH-1]}},edge_x_product[1]};
+
+    assign edge_x_product_ext[2] = {{(EDGE_WIDTH-START_PRODUCT_WIDTH) {edge_x_product[2][START_PRODUCT_WIDTH-1]}},edge_x_product[2]};
+
+    assign edge_y_product_ext[0] = {{(EDGE_WIDTH-START_PRODUCT_WIDTH) {edge_y_product[0][START_PRODUCT_WIDTH-1] }},edge_y_product[0]};
+
+    assign edge_y_product_ext[1] = { {(EDGE_WIDTH-START_PRODUCT_WIDTH) {edge_y_product[1][START_PRODUCT_WIDTH-1]}},edge_y_product[1]};
+
+    assign edge_y_product_ext[2] = {{(EDGE_WIDTH-START_PRODUCT_WIDTH) {edge_y_product[2][START_PRODUCT_WIDTH-1]}}, edge_y_product[2] };
+
+    assign calculated_edge_start[0] = edge_x_product_ext[0] + edge_y_product_ext[0] + edge_c[0];
+    assign calculated_edge_start[1] = edge_x_product_ext[1] + edge_y_product_ext[1] + edge_c[1];
+    assign calculated_edge_start[2] = edge_x_product_ext[2] +edge_y_product_ext[2] +edge_c[2];
+
 
     function signed [COORD_WIDTH-1:0] min2;
         input signed [COORD_WIDTH-1:0] a;
@@ -98,222 +219,6 @@ module triangle_setup #(
         end
     endfunction
 
-    assign raw_min_x = min2(min2(x0_reg, x1_reg), x2_reg);
-    assign raw_max_x = max2(max2(x0_reg, x1_reg), x2_reg);
-
-    assign raw_min_y = min2(min2(y0_reg, y1_reg), y2_reg);
-    assign raw_max_y = max2(max2(y0_reg, y1_reg), y2_reg);
-
-    assign bbox_outside = (raw_max_x < 0) || (raw_min_x > SCREEN_MAX_X) || (raw_max_y < 0) || (raw_min_y > SCREEN_MAX_Y);
-
-    wire signed [COORD_WIDTH:0] dx10;
-    wire signed [COORD_WIDTH:0] dy10;
-    wire signed [COORD_WIDTH:0] dx20;
-    wire signed [COORD_WIDTH:0] dy20;
-
-    wire signed [AREA_PRODUCT_WIDTH-1:0] area_product_0;
-    wire signed [AREA_PRODUCT_WIDTH-1:0] area_product_1;
-
-    wire signed [EDGE_WIDTH-1:0] area_product_0_ext;
-    wire signed [EDGE_WIDTH-1:0] area_product_1_ext;
-    wire signed [EDGE_WIDTH-1:0] area_twice;
-
-    assign dx10 = x1_ext - x0_ext;
-    assign dy10 = y1_ext - y0_ext;
-    assign dx20 = x2_ext - x0_ext;
-    assign dy20 = y2_ext - y0_ext;
-
-    assign area_product_0 = dx10 * dy20;
-    assign area_product_1 = dy10 * dx20;
-
-    assign area_product_0_ext = {
-        {(EDGE_WIDTH-AREA_PRODUCT_WIDTH) {
-            area_product_0[AREA_PRODUCT_WIDTH-1]
-        }},
-        area_product_0
-    };
-
-    assign area_product_1_ext = {
-        {(EDGE_WIDTH-AREA_PRODUCT_WIDTH) {
-            area_product_1[AREA_PRODUCT_WIDTH-1]
-        }},
-        area_product_1
-    };
-
-    assign area_twice =
-        area_product_0_ext - area_product_1_ext;
-
-    assign triangle_skip =
-        (area_twice == 0) || bbox_outside;
-
-
-     // E(x,y) = A*x + B*y + C
-     
-
-    wire signed [COEFF_WIDTH-1:0] raw_edge_a [0:2];
-    wire signed [COEFF_WIDTH-1:0] raw_edge_b [0:2];
-    wire signed [EDGE_WIDTH-1:0]  raw_edge_c [0:2];
-
-    // Edge 0: v0 -> v1
-    assign raw_edge_a[0] = y0_ext - y1_ext;
-    assign raw_edge_b[0] = x1_ext - x0_ext;
-
-    // Edge 1: v1 -> v2
-    assign raw_edge_a[1] = y1_ext - y2_ext;
-    assign raw_edge_b[1] = x2_ext - x1_ext;
-
-    // Edge 2: v2 -> v0
-    assign raw_edge_a[2] = y2_ext - y0_ext;
-    assign raw_edge_b[2] = x0_ext - x2_ext;
-
-
-    wire signed [C_PRODUCT_WIDTH-1:0] c0_product_0;
-    wire signed [C_PRODUCT_WIDTH-1:0] c0_product_1;
-    wire signed [C_PRODUCT_WIDTH-1:0] c1_product_0;
-    wire signed [C_PRODUCT_WIDTH-1:0] c1_product_1;
-    wire signed [C_PRODUCT_WIDTH-1:0] c2_product_0;
-    wire signed [C_PRODUCT_WIDTH-1:0] c2_product_1;
-
-    wire signed [EDGE_WIDTH-1:0] c0_product_0_ext;
-    wire signed [EDGE_WIDTH-1:0] c0_product_1_ext;
-    wire signed [EDGE_WIDTH-1:0] c1_product_0_ext;
-    wire signed [EDGE_WIDTH-1:0] c1_product_1_ext;
-    wire signed [EDGE_WIDTH-1:0] c2_product_0_ext;
-    wire signed [EDGE_WIDTH-1:0] c2_product_1_ext;
-
-    assign c0_product_0 = x0_reg * y1_reg;
-    assign c0_product_1 = y0_reg * x1_reg;
-
-    assign c1_product_0 = x1_reg * y2_reg;
-    assign c1_product_1 = y1_reg * x2_reg;
-
-    assign c2_product_0 = x2_reg * y0_reg;
-    assign c2_product_1 = y2_reg * x0_reg;
-
-    assign c0_product_0_ext = {
-        {(EDGE_WIDTH-C_PRODUCT_WIDTH) {
-            c0_product_0[C_PRODUCT_WIDTH-1]
-        }},
-        c0_product_0
-    };
-
-    assign c0_product_1_ext = {
-        {(EDGE_WIDTH-C_PRODUCT_WIDTH) {
-            c0_product_1[C_PRODUCT_WIDTH-1]
-        }},
-        c0_product_1
-    };
-
-    assign c1_product_0_ext = {
-        {(EDGE_WIDTH-C_PRODUCT_WIDTH) {
-            c1_product_0[C_PRODUCT_WIDTH-1]
-        }},
-        c1_product_0
-    };
-
-    assign c1_product_1_ext = {
-        {(EDGE_WIDTH-C_PRODUCT_WIDTH) {
-            c1_product_1[C_PRODUCT_WIDTH-1]
-        }},
-        c1_product_1
-    };
-
-    assign c2_product_0_ext = {
-        {(EDGE_WIDTH-C_PRODUCT_WIDTH) {
-            c2_product_0[C_PRODUCT_WIDTH-1]
-        }},
-        c2_product_0
-    };
-
-    assign c2_product_1_ext = {
-        {(EDGE_WIDTH-C_PRODUCT_WIDTH) {
-            c2_product_1[C_PRODUCT_WIDTH-1]
-        }},
-        c2_product_1
-    };
-
-    assign raw_edge_c[0] =
-        c0_product_0_ext - c0_product_1_ext;
-
-    assign raw_edge_c[1] =
-        c1_product_0_ext - c1_product_1_ext;
-
-    assign raw_edge_c[2] =
-        c2_product_0_ext - c2_product_1_ext;
-
-
-    wire signed [START_PRODUCT_WIDTH-1:0] edge_x_product [0:2];
-    wire signed [START_PRODUCT_WIDTH-1:0] edge_y_product [0:2];
-
-    wire signed [EDGE_WIDTH-1:0] edge_x_product_ext [0:2];
-    wire signed [EDGE_WIDTH-1:0] edge_y_product_ext [0:2];
-
-    wire signed [EDGE_WIDTH-1:0] calculated_edge_start [0:2];
-
-    assign edge_x_product[0] = edge_a[0] * min_x;
-    assign edge_x_product[1] = edge_a[1] * min_x;
-    assign edge_x_product[2] = edge_a[2] * min_x;
-
-    assign edge_y_product[0] = edge_b[0] * min_y;
-    assign edge_y_product[1] = edge_b[1] * min_y;
-    assign edge_y_product[2] = edge_b[2] * min_y;
-
-    assign edge_x_product_ext[0] = {
-        {(EDGE_WIDTH-START_PRODUCT_WIDTH) {
-            edge_x_product[0][START_PRODUCT_WIDTH-1]
-        }},
-        edge_x_product[0]
-    };
-
-    assign edge_x_product_ext[1] = {
-        {(EDGE_WIDTH-START_PRODUCT_WIDTH) {
-            edge_x_product[1][START_PRODUCT_WIDTH-1]
-        }},
-        edge_x_product[1]
-    };
-
-    assign edge_x_product_ext[2] = {
-        {(EDGE_WIDTH-START_PRODUCT_WIDTH) {
-            edge_x_product[2][START_PRODUCT_WIDTH-1]
-        }},
-        edge_x_product[2]
-    };
-
-    assign edge_y_product_ext[0] = {
-        {(EDGE_WIDTH-START_PRODUCT_WIDTH) {
-            edge_y_product[0][START_PRODUCT_WIDTH-1]
-        }},
-        edge_y_product[0]
-    };
-
-    assign edge_y_product_ext[1] = {
-        {(EDGE_WIDTH-START_PRODUCT_WIDTH) {
-            edge_y_product[1][START_PRODUCT_WIDTH-1]
-        }},
-        edge_y_product[1]
-    };
-
-    assign edge_y_product_ext[2] = {
-        {(EDGE_WIDTH-START_PRODUCT_WIDTH) {
-            edge_y_product[2][START_PRODUCT_WIDTH-1]
-        }},
-        edge_y_product[2]
-    };
-
-    assign calculated_edge_start[0] =
-        edge_x_product_ext[0] +
-        edge_y_product_ext[0] +
-        edge_c[0];
-
-    assign calculated_edge_start[1] =
-        edge_x_product_ext[1] +
-        edge_y_product_ext[1] +
-        edge_c[1];
-
-    assign calculated_edge_start[2] =
-        edge_x_product_ext[2] +
-        edge_y_product_ext[2] +
-        edge_c[2];
 
     always @(posedge clk) begin
         if (reset) begin
@@ -351,6 +256,7 @@ module triangle_setup #(
 
             busy <= 1'b0;
             done <= 1'b0;
+
         end else begin
             done <= 1'b0;
 
@@ -388,7 +294,7 @@ module triangle_setup #(
                            ? SCREEN_MAX_Y
                            : raw_max_y;
                     
-                    //normalize so pos = triangle interior
+                    //normalized so positive = triangle interior
 
                     if (area_twice > 0) begin
                         edge_a[0] <= raw_edge_a[0];
@@ -428,22 +334,15 @@ module triangle_setup #(
                     /*//=============================================
                      * Top-left edge inclusion rule.
                      * Screen Y coordinates increase downward.
+                     *       (y_a == y_b && x_a < x_b); means flat line pointing left    //top edge
+                     *       (y_a > y_b); or (Aab > 0)                // left edge
                      *///=======================================
 
-                    edge_inclusive[0] <=
-                        (edge_a[0] > 0) ||
-                        ((edge_a[0] == 0) &&
-                         (edge_b[0] > 0));
+                    edge_inclusive[0] <= (edge_a[0] > 0) ||((edge_a[0] == 0) && (edge_b[0] > 0));
 
-                    edge_inclusive[1] <=
-                        (edge_a[1] > 0) ||
-                        ((edge_a[1] == 0) &&
-                         (edge_b[1] > 0));
+                    edge_inclusive[1] <= (edge_a[1] > 0) || ((edge_a[1] == 0) && (edge_b[1] > 0));
 
-                    edge_inclusive[2] <=
-                        (edge_a[2] > 0) ||
-                        ((edge_a[2] == 0) &&
-                         (edge_b[2] > 0));
+                    edge_inclusive[2] <= (edge_a[2] > 0) || ((edge_a[2] == 0) &&  (edge_b[2] > 0));
 
                     state <= FINISH;
                 end
